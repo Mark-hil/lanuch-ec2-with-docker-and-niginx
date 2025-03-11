@@ -1,0 +1,100 @@
+name: Deploy EC2, Install Docker & Nginx, Configure Reverse Proxy
+
+on:
+  push:
+    branches:
+      - main  # Trigger workflow on push to main
+#   workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v2
+        run: |
+          echo "Code has been checked out."
+
+      # 2. Set up AWS Credentials (GitHub Secrets for AWS keys)
+      - name: Set up AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Choose your AWS region
+        run: |
+          echo "AWS Credentials set up."
+
+      # 3. Apply Terraform to provision EC2 instance (and other resources)
+      - name: Apply Terraform Configuration
+        run: |
+          echo "Initializing Terraform..."
+          terraform init
+          echo "Applying Terraform configuration..."
+          terraform apply -auto-approve
+          echo "Terraform applied successfully."
+
+      # 4. Get EC2 Public IP
+      - name: Get EC2 Public IP
+        id: ec2_ip
+        run: |
+          echo "Retrieving EC2 Public IP..."
+          PUBLIC_IP=$(terraform output -raw ec2_public_ip)
+          echo "::set-output name=public_ip::$PUBLIC_IP"
+          echo "EC2 Public IP: $PUBLIC_IP"
+
+      # 5. SSH into EC2, Install Docker, Pull Image, Run Container & Setup Nginx
+      - name: SSH into EC2 and Set Up Docker, Pull Image & Configure Nginx
+        run: |
+          echo "SSH into EC2 instance at ${{ steps.ec2_ip.outputs.public_ip }}"
+
+          ssh -o StrictHostKeyChecking=no -i MyKeyPair.pem ubuntu@${{ steps.ec2_ip.outputs.public_ip }} << 'EOF'
+            echo "Updating package lists..."
+            sudo apt update -y
+
+            echo "Installing Docker..."
+            sudo apt install -y docker.io
+            sudo systemctl start docker
+            sudo systemctl enable docker
+
+            echo "Pulling Docker image from Docker Hub..."
+            sudo docker pull markhill97/simple-user-management-fastapi-app:latest  # Replace with your Docker image name
+
+            echo "Running the Docker container..."
+            sudo docker run -d -p 8080:80 markhill97/simple-user-management-fastapi-app:latest  # Replace with your app's port
+
+            echo "Installing Nginx..."
+            sudo apt install -y nginx
+            sudo systemctl start nginx
+            sudo systemctl enable nginx
+
+            echo "Configuring Nginx to reverse proxy to Docker container..."
+            echo "
+            server {
+              listen 80;
+              server_name _;
+
+              location / {
+                proxy_pass http://localhost:8080;  # Assuming Docker container runs on port 8080
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+            }
+            " | sudo tee /etc/nginx/sites-available/default
+
+            echo "Restarting Nginx..."
+            sudo systemctl restart nginx
+
+            echo "Deployment completed successfully."
+          EOF
+
+      # 6. Clean up Terraform Resources (Optional)
+      - name: Clean up Terraform resources (Optional)
+        run: |
+          echo "Destroying Terraform resources..."
+          terraform destroy -auto-approve
+          echo "Terraform resources destroyed."
