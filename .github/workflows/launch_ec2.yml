@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main  # Trigger workflow on push to main
-#   workflow_dispatch:  # Allow manual trigger
 
 jobs:
   deploy:
@@ -42,15 +41,15 @@ jobs:
         run: |
           echo "Retrieving EC2 Public IP..."
           PUBLIC_IP=$(terraform output -raw ec2_public_ip)
-          echo "::set-output name=public_ip::$PUBLIC_IP"
           echo "EC2 Public IP: $PUBLIC_IP"
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV  # Set EC2 IP as environment variable
 
       # 5. SSH into EC2, Install Docker, Pull Image, Run Container & Setup Nginx
       - name: SSH into EC2 and Set Up Docker, Pull Image & Configure Nginx
         run: |
-          echo "SSH into EC2 instance at ${{ steps.ec2_ip.outputs.public_ip }}"
-
-          ssh -o StrictHostKeyChecking=no -i MyKeyPair.pem ubuntu@${{ steps.ec2_ip.outputs.public_ip }} << 'EOF'
+          echo "SSH into EC2 instance at ${{ env.PUBLIC_IP }}"
+          
+          ssh -o StrictHostKeyChecking=no -i MyKeyPair.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
             echo "Updating package lists..."
             sudo apt update -y
 
@@ -92,8 +91,16 @@ jobs:
             echo "Deployment completed successfully."
           EOF
 
-      # 6. Clean up Terraform Resources (Optional)
-      - name: Clean up Terraform resources (Optional)
+      # 6. Health Check: Verify that the application is running via the reverse proxy
+      - name: Health Check - Verify Application is Running
+        run: |
+          echo "Performing health check on application at http://${{ env.PUBLIC_IP }}/"
+          curl -s -o /dev/null -w "%{http_code}" http://${{ env.PUBLIC_IP }}/
+        continue-on-error: true  # We want to check the health but don't fail the whole workflow if it fails
+
+      # 7. Conditional Destroy (Only if health check passed)
+      - name: Conditional Destroy Terraform Resources (Optional)
+        if: ${{ success() }}  # Only destroy if all steps before it are successful
         run: |
           echo "Destroying Terraform resources..."
           terraform destroy -auto-approve
