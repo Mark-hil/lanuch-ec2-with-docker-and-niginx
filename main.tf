@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "us-east-1"  # Specify your region
+  region = "eu-west-1"  # Specify your region
 }
 
 resource "aws_security_group" "allow_ssh_http" {
