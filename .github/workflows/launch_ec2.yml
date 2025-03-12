@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # 2. Set up AWS Credentials (GitHub Secrets for AWS keys)
+      # 2. Set up AWS Credentials
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -28,7 +28,7 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      # 4. Apply Terraform to provision EC2 instance
+      # 4. Apply Terraform Configuration
       - name: Apply Terraform Configuration
         run: |
           echo "Initializing Terraform..."
@@ -50,35 +50,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      # 7. Capture EC2 Public IP from JSON output
+      # 7. Retrieve EC2 Public IP
       - name: Retrieve EC2 Public IP
         run: |
           echo "Retrieving EC2 Public IP..."
-          
-          # Capture raw Terraform output
-          terraform_output=$(terraform output -json ec2_public_ip)
-          echo "Raw Terraform output: $terraform_output"  # Debugging step
+          terraform_output=$(terraform output -json ec2_public_ip 2>/dev/null)
+          echo "Raw Terraform output: $terraform_output"
 
-          # Verify if the output is valid JSON
+          # Validate JSON format
           if ! echo "$terraform_output" | jq empty; then
-            echo "Error: Invalid JSON format detected."
+            echo "Error: Invalid JSON format detected. Raw output:"
+            echo "$terraform_output"
             exit 1
           fi
 
-          # Parse using jq
+          # Extract the public IP from the JSON output
           EC2_PUBLIC_IP=$(echo "$terraform_output" | jq -r '.value')
           echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
 
-          # Check if the IP is empty
+          # Check if the public IP is empty
           if [ -z "$EC2_PUBLIC_IP" ]; then
             echo "Error: EC2 Public IP is empty."
             exit 1
           fi
 
+          # Set the EC2 Public IP as a GitHub environment variable
           echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
           echo "Successfully set PUBLIC_IP as an environment variable."
-
-
 
       # 8. Set up SSH key
       - name: Set up SSH key
@@ -87,7 +85,7 @@ jobs:
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/mykey.pem
           chmod 600 ~/.ssh/mykey.pem
 
-      # 9. SSH into EC2 and Set Up Docker, Pull Image & Configure Nginx
+      # 9. SSH into EC2 and set up Docker, pull image, and configure Nginx
       - name: SSH into EC2 and Set Up
         run: |
           echo "SSH into EC2 instance at ${{ env.PUBLIC_IP }}"
@@ -96,8 +94,12 @@ jobs:
             sudo apt install -y docker.io
             sudo systemctl start docker
             sudo systemctl enable docker
+
+            # Pull and run Docker image
             sudo docker pull markhill97/simple-user-management-fastapi-app:latest
             sudo docker run -d -p 8080:80 markhill97/simple-user-management-fastapi-app:latest
+
+            # Install and configure Nginx
             sudo apt install -y nginx
             echo "
             server {
@@ -115,13 +117,13 @@ jobs:
             sudo systemctl restart nginx
           EOF
 
-      # 10. Health Check: Verify that the application is running
+      # 10. Health Check
       - name: Health Check - Verify Application
         run: |
           echo "Performing health check on application at http://${{ env.PUBLIC_IP }}/"
           curl -s -o /dev/null -w "%{http_code}" http://${{ env.PUBLIC_IP }}/
 
-      # 11. Conditional Destroy Terraform Resources
+      # 11. Conditional Destroy of Terraform Resources
       - name: Conditional Destroy Terraform Resources
         if: ${{ success() }}
         run: |
