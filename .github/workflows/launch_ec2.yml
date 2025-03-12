@@ -71,7 +71,7 @@ jobs:
         run: |
          mkdir -p ~/.ssh
          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/test-niginx.pem
-         chmod 600 ~/.ssh/mykey.pem
+         chmod 600 ~/.ssh/test-niginx.pem
          # Print key info for verification (safe - doesn't expose private key)
          ssh-keygen -l -f ~/.ssh/test-niginx.pem
 
