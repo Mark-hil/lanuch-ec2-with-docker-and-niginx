@@ -50,11 +50,11 @@ jobs:
         run: |
           echo "Retrieving EC2 Public IP..."
 
-          # Capture the Terraform output, suppressing additional logs
+          # Capture the raw Terraform output while suppressing additional logs
           terraform_output=$(terraform output -json ec2_public_ip 2>/dev/null)
           echo "Raw Terraform output: $terraform_output"
 
-          # Sanitize the output by removing quotes
+          # Extract only the IP by removing quotes and ensuring no extraneous content
           EC2_PUBLIC_IP=$(echo "$terraform_output" | sed -e 's/^"//' -e 's/"$//')
           echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
 
@@ -64,13 +64,14 @@ jobs:
             exit 1
           fi
 
-          # Write the sanitized IP to the GITHUB_ENV file
-          echo "PUBLIC_IP=$EC2_PUBLIC_IP <<EOF" >> $GITHUB_ENV
+          # Write the sanitized IP to GITHUB_ENV
+          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
           echo "Successfully set PUBLIC_IP as an environment variable."
 
-          # Debugging: Output the contents of GITHUB_ENV
+          # Debugging: Output the contents of GITHUB_ENV for verification
           echo "Contents of GITHUB_ENV:"
           cat $GITHUB_ENV
+
 
 
       # 8. Set up SSH key
