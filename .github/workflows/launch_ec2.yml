@@ -48,8 +48,11 @@ jobs:
       # 7. Retrieve EC2 Public IP - FIXED
       - name: Retrieve EC2 Public IP
         run: |
-          # Extract only the IP address using grep
-          EC2_PUBLIC_IP=$(terraform output ec2_public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+          # Extract IP and save it to a temporary file
+          terraform output ec2_public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' > ip.txt
+          
+          # Read the IP from the file to ensure clean format
+          EC2_PUBLIC_IP=$(cat ip.txt)
           
           # Verify we got an IP address
           if [ -z "$EC2_PUBLIC_IP" ]; then
@@ -57,8 +60,11 @@ jobs:
             exit 1
           fi
           
-          # Set the environment variable with minimal output
-          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> "$GITHUB_ENV"
+          # Format the environment variable with explicit quotation
+          # The delimiter '<<EOF' helps avoid any issues with special characters
+          echo "PUBLIC_IP<<EOF" >> $GITHUB_ENV
+          echo "$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       # 8. Set up SSH key
       - name: Set up SSH key
