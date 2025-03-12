@@ -31,7 +31,7 @@ resource "aws_security_group" "allow_ssh_http" {
 resource "aws_instance" "ec2_instance" {
   ami           = "ami-08f9a9c699d2ab3f9"  # Replace with a valid AMI ID
   instance_type = "t2.micro"
-  key_name      = "mykey"  # Replace with your key pair name
+  key_name      = "test-niginx"  # Replace with your key pair name
   security_groups = [aws_security_group.allow_ssh_http.name]
   
   tags = {
