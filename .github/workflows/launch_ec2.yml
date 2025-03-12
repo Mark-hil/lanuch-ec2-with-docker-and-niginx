@@ -46,11 +46,18 @@ jobs:
           echo "EC2 Public IP: $PUBLIC_IP"
           echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV  # Set EC2 IP as environment variable
 
-      # 6. SSH into EC2, Install Docker, Pull Image, Run Container & Setup Nginx
+      # 6. Set up SSH key from GitHub Secrets
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/mykey.pem
+          chmod 600 ~/.ssh/mykey.pem
+
+      # 7. SSH into EC2, Install Docker, Pull Image, Run Container & Setup Nginx
       - name: SSH into EC2 and Set Up Docker, Pull Image & Configure Nginx
         run: |
           echo "SSH into EC2 instance at ${{ env.PUBLIC_IP }}"
-          ssh -o StrictHostKeyChecking=no -i MyKeyPair.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
             echo "Updating package lists..."
             sudo apt update -y
 
@@ -92,14 +99,14 @@ jobs:
             echo "Deployment completed successfully."
           EOF
 
-      # 7. Health Check: Verify that the application is running via the reverse proxy
+      # 8. Health Check: Verify that the application is running via the reverse proxy
       - name: Health Check - Verify Application is Running
         run: |
           echo "Performing health check on application at http://${{ env.PUBLIC_IP }}/"
           curl -s -o /dev/null -w "%{http_code}" http://${{ env.PUBLIC_IP }}/
         continue-on-error: true  # We want to check the health but don't fail the whole workflow if it fails
 
-      # 8. Conditional Destroy (Only if health check passed)
+      # 9. Conditional Destroy (Only if health check passed)
       - name: Conditional Destroy Terraform Resources (Optional)
         if: ${{ success() }}  # Only destroy if all steps before it are successful
         run: |
