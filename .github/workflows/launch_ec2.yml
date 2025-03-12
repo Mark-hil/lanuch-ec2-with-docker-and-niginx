@@ -57,7 +57,13 @@ jobs:
           
           # Capture raw Terraform output
           terraform_output=$(terraform output -json ec2_public_ip)
-          echo "Terraform output: $terraform_output"  # Debugging step
+          echo "Raw Terraform output: $terraform_output"  # Debugging step
+
+          # Verify if the output is valid JSON
+          if ! echo "$terraform_output" | jq empty; then
+            echo "Error: Invalid JSON format detected."
+            exit 1
+          fi
 
           # Parse using jq
           EC2_PUBLIC_IP=$(echo "$terraform_output" | jq -r '.value')
@@ -65,12 +71,13 @@ jobs:
 
           # Check if the IP is empty
           if [ -z "$EC2_PUBLIC_IP" ]; then
-            echo "Error: EC2 Public IP is empty"
+            echo "Error: EC2 Public IP is empty."
             exit 1
           fi
 
           echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
           echo "Successfully set PUBLIC_IP as an environment variable."
+
 
 
       # 8. Set up SSH key
