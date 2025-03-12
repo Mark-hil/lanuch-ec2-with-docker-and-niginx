@@ -50,21 +50,22 @@ jobs:
         run: |
           echo "Retrieving EC2 Public IP..."
           
-          # Get the raw output first and inspect it
+          # Run terraform output and capture just the last line which should be the IP
           RAW_OUTPUT=$(terraform output ec2_public_ip)
           echo "Raw output: $RAW_OUTPUT"
           
-          # Clean the output by removing quotes and whitespace
-          EC2_PUBLIC_IP=$(echo "$RAW_OUTPUT" | tr -d '"' | tr -d ' ')
-          echo "Cleaned EC2 Public IP: $EC2_PUBLIC_IP"
+          # Extract the IP address pattern using grep
+          EC2_PUBLIC_IP=$(echo "$RAW_OUTPUT" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+          echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
           
-          # Validate the IP format using regex (optional but recommended)
-          if [[ ! $EC2_PUBLIC_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Warning: The extracted IP doesn't match the expected format. Continuing anyway."
+          # Validate that we found an IP
+          if [ -z "$EC2_PUBLIC_IP" ]; then
+            echo "Error: Failed to extract a valid IP address."
+            exit 1
           fi
           
-          # Set environment variable
-          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          # Write to GITHUB_ENV with the correct syntax
+          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> "$GITHUB_ENV"
           echo "Successfully set PUBLIC_IP as an environment variable."
 
       # 8. Set up SSH key
