@@ -3,18 +3,16 @@ name: Deploy EC2, Install Docker & Nginx, Configure Reverse Proxy
 on:
   push:
     branches:
-      - main  # Trigger workflow on push to main
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # 2. Set up AWS Credentials
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -22,84 +20,53 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      # 3. Install Terraform
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.5.0
 
-      # 4. Apply Terraform Configuration
       - name: Apply Terraform Configuration
         run: |
-          echo "Initializing Terraform..."
           terraform init
-          echo "Applying Terraform configuration..."
           terraform apply -auto-approve
-          echo "Terraform applied successfully."
 
-      # 5. Display Terraform Outputs
       - name: Display Terraform Outputs
         run: |
-          echo "Terraform outputs:"
           terraform output -json
 
-      # 6. Install jq
-      - name: Install jq
-        run: |
-          echo "Installing jq for JSON processing..."
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      # 7. Retrieve EC2 Public IP
       - name: Retrieve EC2 Public IP
         run: |
           echo "Retrieving EC2 Public IP..."
-          terraform_output=$(terraform output -json ec2_public_ip 2>/dev/null)
+          terraform_output=$(terraform output -json ec2_public_ip)
           echo "Raw Terraform output: $terraform_output"
-
-          # Validate JSON format
-          if ! echo "$terraform_output" | jq empty; then
-            echo "Error: Invalid JSON format detected. Raw output:"
-            echo "$terraform_output"
-            exit 1
-          fi
-
-          # Extract the public IP from the JSON output
-          EC2_PUBLIC_IP=$(echo "$terraform_output" | jq -r '.value')
+          
+          # Remove quotes
+          EC2_PUBLIC_IP=$(echo "$terraform_output" | tr -d '"')
           echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
 
-          # Check if the public IP is empty
           if [ -z "$EC2_PUBLIC_IP" ]; then
             echo "Error: EC2 Public IP is empty."
             exit 1
           fi
 
-          # Set the EC2 Public IP as a GitHub environment variable
           echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
           echo "Successfully set PUBLIC_IP as an environment variable."
 
-      # 8. Set up SSH key
       - name: Set up SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/mykey.pem
           chmod 600 ~/.ssh/mykey.pem
 
-      # 9. SSH into EC2 and set up Docker, pull image, and configure Nginx
       - name: SSH into EC2 and Set Up
         run: |
-          echo "SSH into EC2 instance at ${{ env.PUBLIC_IP }}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
             sudo apt update -y
             sudo apt install -y docker.io
             sudo systemctl start docker
             sudo systemctl enable docker
-
-            # Pull and run Docker image
             sudo docker pull markhill97/simple-user-management-fastapi-app:latest
             sudo docker run -d -p 8080:80 markhill97/simple-user-management-fastapi-app:latest
-
-            # Install and configure Nginx
             sudo apt install -y nginx
             echo "
             server {
@@ -117,16 +84,11 @@ jobs:
             sudo systemctl restart nginx
           EOF
 
-      # 10. Health Check
       - name: Health Check - Verify Application
         run: |
-          echo "Performing health check on application at http://${{ env.PUBLIC_IP }}/"
           curl -s -o /dev/null -w "%{http_code}" http://${{ env.PUBLIC_IP }}/
 
-      # 11. Conditional Destroy of Terraform Resources
       - name: Conditional Destroy Terraform Resources
         if: ${{ success() }}
         run: |
-          echo "Destroying Terraform resources..."
           terraform destroy -auto-approve
-          echo "Terraform resources destroyed."
