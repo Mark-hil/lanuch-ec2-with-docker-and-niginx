@@ -40,7 +40,8 @@ jobs:
         # 5. Display Terraform Outputs
       - name: Display Terraform Outputs
         run: |
-          terraform output
+          echo "Terraform outputs:"
+          terraform output -json
 
       # 6. Get EC2 Public IP
         # 6. Get EC2 Public IP
