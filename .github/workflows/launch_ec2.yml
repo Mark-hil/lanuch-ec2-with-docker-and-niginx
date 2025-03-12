@@ -70,19 +70,19 @@ jobs:
       - name: Set up SSH key and verify
         run: |
          mkdir -p ~/.ssh
-         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/mykey.pem
+         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/test-niginx.pem
          chmod 600 ~/.ssh/mykey.pem
          # Print key info for verification (safe - doesn't expose private key)
-         ssh-keygen -l -f ~/.ssh/mykey.pem
+         ssh-keygen -l -f ~/.ssh/test-niginx.pem
 
      # SSH into EC2 with verbose output
       - name: SSH into EC2 with verbose output
         run: |
-          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem ubuntu@${{ env.PUBLIC_IP }} 'echo "Connection successful"'   
+          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/test-niginx.pem ubuntu@${{ env.PUBLIC_IP }} 'echo "Connection successful"'   
       # 9. SSH into EC2 and set up Docker, pull image, and configure Nginx
       - name: SSH into EC2 and Set Up
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/test-niginx.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
             sudo apt update -y
             sudo apt install -y docker.io
             sudo systemctl start docker
