@@ -62,9 +62,10 @@ jobs:
             exit 1
           fi
 
-          # Use the new GitHub environment file method to pass the value
-          echo "Setting the PUBLIC_IP environment variable"
-          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV   # Set EC2 IP as environment variable
+          # Set the EC2 Public IP as a GitHub environment variable
+          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          echo "Successfully set PUBLIC_IP as an environment variable"
+
 
   # Set EC2 IP as environment variable
       # 6. Set up SSH key from GitHub Secrets
