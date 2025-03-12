@@ -49,27 +49,23 @@ jobs:
           echo "Retrieving EC2 Public IP..."
 
           # Capture the public IP from the terraform output -json
-          # Adding an echo to check the output of terraform
-          echo "Running terraform output -json ec2_public_ip"
           terraform_output=$(terraform output -json ec2_public_ip)
           echo "Terraform output: $terraform_output"
 
-          # Extract the public IP using grep (checking the pattern)
-          EC2_PUBLIC_IP=$(echo "$terraform_output" | grep -oP '"value": "\K[^"]+')
-          
-          # Check if the IP extraction is successful
+          # Strip the quotes and set the environment variable directly
+          EC2_PUBLIC_IP=$(echo "$terraform_output" | tr -d '"')
           echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
-        
+
           # Check if the public IP is empty
           if [ -z "$EC2_PUBLIC_IP" ]; then
             echo "Error: EC2 Public IP is empty"
             exit 1
           fi
-        
+
           # Use the new GitHub environment file method to pass the value
           echo "Setting the PUBLIC_IP environment variable"
           echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV   # Set EC2 IP as environment variable
-  # Set EC2 IP as environment variable
+
   # Set EC2 IP as environment variable
       # 6. Set up SSH key from GitHub Secrets
       - name: Set up SSH key
