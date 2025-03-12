@@ -43,21 +43,24 @@ jobs:
           echo "Terraform outputs:"
           terraform output -json
 
-      # 6. Get EC2 Public IP
-        # 6. Get EC2 Public IP
-      - name: Get EC2 Public IP
-        id: ec2_ip
+      # 6. Capture EC2 Public IP from JSON output
+      - name: Capture EC2 Public IP
         run: |
           echo "Retrieving EC2 Public IP..."
-          PUBLIC_IP=$(terraform output -raw ec2_public_ip)
-          echo "EC2 Public IP: $value"
           
-          if [ -z "$value" ]; then
+          # Capture the public IP from the terraform output -json
+          PUBLIC_IP=$(terraform output -json | jq -r '.ec2_public_ip.value')
+          
+          echo "EC2 Public IP: $PUBLIC_IP"
+          
+          # Check if the public IP is empty
+          if [ -z "$PUBLIC_IP" ]; then
             echo "Error: EC2 Public IP is empty"
             exit 1
-          fi
-          
-          echo "PUBLIC_IP=$value" >> $GITHUB_ENV  # Set EC2 IP as environment variable
+            fi
+
+          # Use the new GitHub environment file method to pass the value
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV   # Set EC2 IP as environment variable
       # 6. Set up SSH key from GitHub Secrets
       - name: Set up SSH key
         run: |
