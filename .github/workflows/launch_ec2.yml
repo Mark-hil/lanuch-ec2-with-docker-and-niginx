@@ -65,7 +65,7 @@ jobs:
           fi
 
           # Write the sanitized IP to the GITHUB_ENV file
-          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          echo "PUBLIC_IP=$EC2_PUBLIC_IP <<EOF" >> $GITHUB_ENV
           echo "Successfully set PUBLIC_IP as an environment variable."
 
           # Debugging: Output the contents of GITHUB_ENV
