@@ -3,16 +3,18 @@ name: Deploy EC2, Install Docker & Nginx, Configure Reverse Proxy
 on:
   push:
     branches:
-      - main
+      - main  # Trigger workflow on push to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # 2. Set up AWS Credentials
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -20,52 +22,64 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      # 3. Install Terraform
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.5.0
 
+      # 4. Apply Terraform Configuration
       - name: Apply Terraform Configuration
         run: |
           terraform init
           terraform apply -auto-approve
 
+      # 5. Display Terraform Outputs
       - name: Display Terraform Outputs
         run: |
           terraform output -json
 
-          - name: Retrieve EC2 Public IP
-          run: |
-            echo "Retrieving EC2 Public IP..."
-        
-            # Capture raw Terraform output
-            terraform_output=$(terraform output -json ec2_public_ip)
-            echo "Raw Terraform output: $terraform_output"
-        
-            # Extract the public IP without quotes
-            EC2_PUBLIC_IP=$(echo "$terraform_output" | tr -d '"')
-            echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
-        
-            # Validate the extracted IP
-            if [ -z "$EC2_PUBLIC_IP" ]; then
-              echo "Error: EC2 Public IP is empty."
-              exit 1
-            fi
-        
-            # Safely write to $GITHUB_ENV
-            {
-              echo "PUBLIC_IP=$EC2_PUBLIC_IP"
-            } >> $GITHUB_ENV
-            cat $GITHUB_ENV
-        
-            echo "Successfully set PUBLIC_IP as an environment variable."
-        
+      # 6. Install jq
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      # 7. Retrieve EC2 Public IP
+      - name: Retrieve EC2 Public IP
+        run: |
+          echo "Retrieving EC2 Public IP..."
+
+          # Capture raw Terraform output
+          terraform_output=$(terraform output -json ec2_public_ip)
+          echo "Raw Terraform output: $terraform_output"
+
+          # Remove quotes from the string
+          EC2_PUBLIC_IP=$(echo "$terraform_output" | tr -d '"')
+          echo "Extracted EC2 Public IP: $EC2_PUBLIC_IP"
+
+          # Validate the extracted IP
+          if [ -z "$EC2_PUBLIC_IP" ]; then
+            echo "Error: EC2 Public IP is empty."
+            exit 1
+          fi
+
+          # Write to GITHUB_ENV and debug it
+          echo "PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          echo "Successfully set PUBLIC_IP as an environment variable."
+
+          # Output the contents of GITHUB_ENV for debugging
+          echo "Contents of GITHUB_ENV:"
+          cat $GITHUB_ENV
+
+      # 8. Set up SSH key
       - name: Set up SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/mykey.pem
           chmod 600 ~/.ssh/mykey.pem
 
+      # 9. SSH into EC2 and set up Docker, pull image, and configure Nginx
       - name: SSH into EC2 and Set Up
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem ubuntu@${{ env.PUBLIC_IP }} << 'EOF'
@@ -73,8 +87,12 @@ jobs:
             sudo apt install -y docker.io
             sudo systemctl start docker
             sudo systemctl enable docker
+
+            # Pull and run Docker image
             sudo docker pull markhill97/simple-user-management-fastapi-app:latest
             sudo docker run -d -p 8080:80 markhill97/simple-user-management-fastapi-app:latest
+
+            # Install and configure Nginx
             sudo apt install -y nginx
             echo "
             server {
@@ -92,10 +110,12 @@ jobs:
             sudo systemctl restart nginx
           EOF
 
+      # 10. Health Check
       - name: Health Check - Verify Application
         run: |
           curl -s -o /dev/null -w "%{http_code}" http://${{ env.PUBLIC_IP }}/
 
+      # 11. Conditional Destroy Terraform Resources
       - name: Conditional Destroy Terraform Resources
         if: ${{ success() }}
         run: |
